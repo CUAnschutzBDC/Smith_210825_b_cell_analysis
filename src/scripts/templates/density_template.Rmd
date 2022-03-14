@@ -1,0 +1,66 @@
+```{r echo = F}
+
+# Strings to match samples and create labels
+#gene <- "{{.x}}"
+sample <- "{{sample}}"
+group <- "{{group}}"
+name <- "{{name}}"
+sect_title <- sample
+
+if(!exists("extra_pound_density")){
+  extra_pound_density <- ""
+}
+
+sample_info <- sample_list[[sample]]
+
+```
+
+###`r extra_pound_density` **`r sect_title`**
+
+```{r {{sample}}-{{group}}-{{name}}-density_all, fig.height=4, fig.width=10}
+seurat_object <- sample_info$seurat_object
+
+if (group == "rna"){
+  plotting_df <- GetAssayData(seurat_object, slot = "data", assay = "RNA") %>%
+    as.matrix %>%
+    t %>%
+    data.frame %>%
+    dplyr::select(all_of(plotting_list))
+} else if (group == "adt"){
+  plotting_df <- GetAssayData(seurat_object, slot = "data", assay = "CLR_ADT") %>%
+    as.matrix %>%
+    t %>%
+    data.frame %>%
+    dplyr::select(all_of(plotting_list))
+} else {
+  stop("Group must be adt or rna")
+}
+
+plotting_df <- cbind(plotting_df, seurat_object[["RNA_cluster"]])
+
+plotting_df_long <- plotting_df %>%
+  tidyr::pivot_longer(cols = all_of(plotting_list),
+                      names_to = "protein",
+                      values_to = "expression")
+  
+plot1 <- ggplot2::ggplot(data = plotting_df_long,
+                         mapping = ggplot2::aes(expression, color = protein)) + 
+  ggplot2::geom_density() + 
+  ggplot2::scale_color_brewer(palette = "Set1")
+
+
+plot2 <- ggplot2::ggplot(data = plotting_df_long,
+                         mapping = ggplot2::aes(x = expression,
+                                                color = protein,
+                                                y = protein,
+                                                fill = protein)) +
+  ggridges::geom_density_ridges() + 
+#  ggridges::theme_ridges()
+  ggplot2::scale_color_brewer(palette = "Set1") +
+  ggplot2::scale_fill_brewer(palette = "Set1")
+
+plot_grid(plot1, plot2,
+          labels = c("A", "B"),
+          nrow = 1, ncol = 2,
+          align = "hv", axis = "lr")
+```

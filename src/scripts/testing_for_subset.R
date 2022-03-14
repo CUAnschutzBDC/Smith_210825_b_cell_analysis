@@ -68,6 +68,11 @@ dsb_adt_vals <- t(GetAssayData(seurat_data, slot = "data", assay = "ADT"))
 
 clr_adt_vals <- t(GetAssayData(seurat_data, slot = "data", assay = "CLR_ADT"))
 
+raw_adt_vals <- GetAssayData(seurat_data, slot = "counts", assay = "CLR_ADT") %>%
+  as.matrix %>%
+  t
+
+
 rna_vals <- t(GetAssayData(seurat_data, slot = "data", assay = "RNA")) %>%
   data.frame %>%
   dplyr::select(all_of(rna_list))
@@ -78,6 +83,9 @@ dsb_adt_vals <- cbind(dsb_adt_vals, seurat_data[["RNA_cluster"]])
 clr_adt_vals <- cbind(clr_adt_vals, seurat_data[["RNA_cluster"]])
 
 rna_vals <- cbind(rna_vals, seurat_data[["RNA_cluster"]])
+
+raw_adt_vals <- cbind(raw_adt_vals, seurat_data[["RNA_cluster"]])
+
 
 nColors <- length(unique(seurat_data$RNA_cluster))
 cluster_colors <- grDevices::colorRampPalette(
@@ -130,6 +138,7 @@ clr_plots <- make_plots(clr_adt_vals, plotting_list = adt_list)
 
 rna_plots <- make_plots(rna_vals, rna_list, data_type = "RNA")
 
+raw_plots <- make_plots(raw_adt_vals, plotting_list = adt_list)
 
 plot_list <- plotDimRed(seurat_data, col_by = rna_list,
                         plot_type = "rna.umap", assay = "RNA")
