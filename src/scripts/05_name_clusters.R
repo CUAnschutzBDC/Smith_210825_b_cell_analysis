@@ -1,7 +1,6 @@
 library(Seurat)
 library(tidyverse)
 library(cowplot)
-library(harmony)
 library(here)
 library(scAnalysisR)
 library(viridis)
@@ -12,7 +11,7 @@ ggplot2::theme_set(ggplot2::theme_classic(base_size = 10))
 
 normalization_method <- "log" # can be SCT or log
 
-sample <- "sample"
+sample <- "healthy_bcells_1"
 
 all_ref_dir <-
   "/Users/wellskr/Documents/Analysis/references/single_cell_references"
@@ -37,72 +36,73 @@ save_dir <- file.path(base_dir_proj, "R_analysis")
 # Read in the data
 seurat_data <- readRDS(file.path(save_dir, "rda_obj", "seurat_processed.rds"))
 
+
 #-------------------------------------------------------------------------------
 
-########################
-# Pancreas development #
-########################
+#########################
+# human cell atlas pbmc #
+#########################
 
 # Information for cell mapping
-ref_dir <- file.path(all_ref_dir, "pancreas/byrnes_2018_mouse")
+ref_dir <- file.path(all_ref_dir, "pbmc/hca_pbmc")
 
-ref_mat <- read.csv(file.path(ref_dir, "E14_epithelial_average.csv"),
+ref_mat <- read.csv(file.path(ref_dir, "clustifyr_reference.csv"),
                     header = TRUE, row.names = 1)
 
 
+DefaultAssay(seurat_data) <- "RNA"
+
 cluster_res <- name_clusters(seurat_data, ref_mat,
                              save_dir = save_dir,
-                             save_name = "celltype_byrnes", ADT = FALSE,
+                             save_name = "pbmc_celltype", ADT = FALSE,
                              assay = "RNA",
-                             nfeatures = 1000, clusters = "RNA_cluster",
+                             nfeatures = 2000, clusters = "RNA_cluster",
                              plot_type = "rna.umap")
 
 seurat_data <- cluster_res$object
 
 seurat_res <- cluster_res$RNA
 
-plotDimRed(seurat_data, col_by = "RNA_celltype_byrnes",
+plotDimRed(seurat_data, col_by = "RNA_pbmc_celltype",
            plot_type = "rna.umap")
 
 write.csv(seurat_res, file.path(save_dir,
-                                "files/celltype_mapping_byrnes_2018.csv"))
+                                "files/celltype_hca_pbmc.csv"))
 
 
 #-------------------------------------------------------------------------------
 
-##################
-# Pancreas atlas #
-##################
+#############
+# bulk pbmc #
+#############
 
 # Information for cell mapping
-ref_dir <- file.path(all_ref_dir, "pancreas/Baron_2016")
+ref_dir <- file.path(all_ref_dir, "pbmc/bulk_RNAseq")
 
-ref_mat <- read.csv(file.path(ref_dir, "clustifyr_mouse_reference.csv"),
-                    header = TRUE, row.names = 1)
+ref_mat <- read.table(file.path(ref_dir,
+                              "gene_id_GSE118165_RNA_gene_abundance.txt"),
+                    header = TRUE, row.names = 1,
+                    sep = " ")
 
+
+DefaultAssay(seurat_data) <- "RNA"
 
 cluster_res <- name_clusters(seurat_data, ref_mat,
                              save_dir = save_dir,
-                             save_name = "baron_celltype", ADT = FALSE,
+                             save_name = "celltype", ADT = FALSE,
                              assay = "RNA",
-                             nfeatures = 1000, clusters = "RNA_cluster",
+                             nfeatures = 2000, clusters = "RNA_cluster",
                              plot_type = "rna.umap")
 
 seurat_data <- cluster_res$object
 
 seurat_res <- cluster_res$RNA
 
-plotDimRed(seurat_data, col_by = "RNA_baron_celltype", plot_type = "rna.umap")
+plotDimRed(seurat_data, col_by = "RNA_celltype",
+           plot_type = "rna.umap")
 
-write.csv(seurat_res,
-          file.path(save_dir, "files/celltype_mapping_baron_2016.csv"))
+write.csv(seurat_res, file.path(save_dir,
+                                "files/celltype_bulk_pbmc.csv"))
 
-# Update based on expression of PP markers
-seurat_data$RNA_celltype <- seurat_data$RNA_baron_celltype
-seurat_data$RNA_celltype[seurat_data$RNA_cluster == 7] <- "PP"
-plotDimRed(seurat_data, col_by = "RNA_celltype", plot_type = "rna.umap")
-
-
-#-------------------------------------------------------------------------------
 
 saveRDS(seurat_data, file.path(save_dir, "rda_obj", "seurat_processed.rds"))

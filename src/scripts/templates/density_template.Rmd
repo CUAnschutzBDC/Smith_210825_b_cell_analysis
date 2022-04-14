@@ -46,7 +46,7 @@ plotting_df_long <- plotting_df %>%
 plot1 <- ggplot2::ggplot(data = plotting_df_long,
                          mapping = ggplot2::aes(expression, color = protein)) + 
   ggplot2::geom_density() + 
-  ggplot2::scale_color_brewer(palette = "Set1")
+  ggplot2::scale_color_manual(values = protein_colors)
 
 
 plot2 <- ggplot2::ggplot(data = plotting_df_long,
@@ -56,8 +56,8 @@ plot2 <- ggplot2::ggplot(data = plotting_df_long,
                                                 fill = protein)) +
   ggridges::geom_density_ridges() + 
 #  ggridges::theme_ridges()
-  ggplot2::scale_color_brewer(palette = "Set1") +
-  ggplot2::scale_fill_brewer(palette = "Set1")
+  ggplot2::scale_color_manual(values = protein_colors) +
+  ggplot2::scale_fill_manual(values = protein_colors)
 
 plot_grid(plot1, plot2,
           labels = c("A", "B"),

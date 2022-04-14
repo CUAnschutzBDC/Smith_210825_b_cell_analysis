@@ -29,9 +29,9 @@ if(sample_info$type == "single"){
                                percent = TRUE,
                                color = celltype_colors)
   plot_grid(plot1, plot2, NULL, NULL, barplot1,
-            labels = c("A", "B", "", "", "D"),
+            labels = c("A", "B", "", "", "C"),
             align = "hv", axis = "lr",
-            nrow = 3, ncol = 2)
+            nrow = 2, ncol = 2)
 } else {
   plot1 <- plotDimRed(seurat_object, col_by = "uncorrected_cluster",
            plot_type = "rna.umap")[[1]]
