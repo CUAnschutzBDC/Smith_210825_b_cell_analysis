@@ -15,11 +15,11 @@ sample_info <- sample_list[[sample]]
 
 ###`r extra_pound_gene_all` **`r sect_title`** {.tabset}
 
-```{r {{sample}}-all_gene, fig.height=8, fig.width=8}
+```{r {{sample}}-{{type}}-all_gene, fig.height=8, fig.width=8}
 merged_seurat <- sample_info$seurat_object
 cluster_colors <- sample_info$cluster_colors
 
-sep_1 <- violin_col_by_1 <- "cluster_celltype"
+sep_1 <- violin_col_by_1 <- "RNA_cluster"
 colors_1 <- cluster_colors
 umap_cols_1 <- colors_1
 
@@ -32,14 +32,10 @@ colors_2 <- umap_cols_2 <- celltype_colors
 
 plot_type = "rna.umap"
 
-assay <- "RNA"
-
-gene_template <- file.path(here(), "src/scripts/templates/gene_plot_template.Rmd")
-
 extra_pound_gene <- paste0(extra_pound_gene_all, "#")
 
 gene_chunks <- genes %>%
-  map(~knit_expand(file = gene_template, sample = sample, group = "group1",
+  map(~knit_expand(file = gene_template, sample = sample, group = group,
                    gene = .x, subset = FALSE))
 ```
 

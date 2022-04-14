@@ -10,12 +10,15 @@ ggplot2::theme_set(ggplot2::theme_classic(base_size = 10))
 
 normalization_method <- "log" # can be SCT or log
 
-sample <- "sample"
+sample <- "healthy_bcells_1"
 
 vars.to.regress <- NULL
 
 HTO <- FALSE
-ADT <- FALSE
+ADT <- TRUE
+adt_PCA <- FALSE # Set to true to run PCA on ADT data (if there are enough
+                 # proteins ex: > 100). Otherwise, set to FALSE and the
+                 # normalized values will be used.
 
 if(normalization_method == "SCT"){
   SCT <- TRUE
@@ -32,7 +35,17 @@ base_dir_proj <- file.path(base_dir, "results", sample)
 save_dir <- file.path(base_dir_proj, "R_analysis")
 
 # Read in the data
-seurat_data <- readRDS(file.path(save_dir, "rda_obj", "seurat_doublet.rds"))
+if(ADT){
+  seurat_data <- readRDS(file.path(save_dir, "rda_obj", "seurat_adt.rds"))
+} else {
+  seurat_data <- readRDS(file.path(save_dir, "rda_obj", "seurat_doublet.rds"))
+  
+}
+  
+DefaultAssay(seurat_data) <- "ADT"
+adt_list <- rownames(seurat_data)
+
+DefaultAssay(seurat_data) <- "RNA"
 
 # Remove doublets
 Idents(seurat_data) <- "Doublet_finder"
@@ -52,19 +65,48 @@ seurat_data <- seurat_data %>%
 seurat_data <- PCA_dimRed(seurat_data, assay = seurat_assay)
 
 RNA_plots <- plot_PCA(HTO = HTO, assay = seurat_assay,
-                      sample_object = seurat_data)
+                      sample_object = seurat_data,
+                      jackstraw = FALSE)
 
 pdf(file.path(save_dir, "images", "RNA_pca.pdf"))
 print(RNA_plots)
 dev.off()
 
 if(ADT){
+  if(adt_PCA){
   # PCA of surface protein
-  seurat_data <- PCA_dimRed(seurat_data, assay = "ADT")
+    seurat_data <- PCA_dimRed(seurat_data, assay = "ADT")
 
-  ADT_plots <- plot_PCA(HTO = HTO, assay = "ADT", sample_object = seurat_data)
+    ADT_plots <- plot_PCA(HTO = HTO, assay = "ADT", sample_object = seurat_data)
 
-  pdf(file.path(save_dir, "images", "RNA_pca.pdf"))
+  } else {
+    # set up dsb values to use in WNN analysis 
+    DefaultAssay(seurat_data) <- "ADT"
+    
+    # hack seurat to use normalized protein values as a dimensionality reduction object.
+    VariableFeatures(seurat_data) <- rownames(seurat_data)
+    
+    # run true pca to initialize dr pca slot for WNN 
+    seurat_data <- ScaleData(seurat_data, verbose = FALSE) %>%
+      RunPCA(reduction.name = "pdsb",
+             features = VariableFeatures(seurat_data),
+             verbose = FALSE)
+    
+    # make matrix of norm values to add as dr embeddings
+    pseudo <- t(GetAssayData(seurat_data, slot = "data"))
+    pseudo_colnames <- paste('pseudo', 1:ncol(pseudo), sep = "_")
+    colnames(pseudo) <- pseudo_colnames
+    # add to object 
+    seurat_data@reductions$pdsb@cell.embeddings = pseudo
+    
+    ADT_plots <- plotDimRed(seurat_data,
+                            col_by = c("orig.ident", "percent.mt",
+                                       "nFeature_RNA", "nCount_RNA",
+                                       "nFeature_ADT", "nCount_ADT"),
+                            plot_type = "pdsb")
+  }
+  
+  pdf(file.path(save_dir, "images", "ADT_pca.pdf"))
   print(ADT_plots)
   dev.off()
 }
@@ -83,34 +125,43 @@ if(ADT){
 #                              plot_type = "harmony")
 
 # UMAP -------------------------------------------------------------------------
-RNA_pcs <- 28
-ADT_pcs <- 8
+RNA_pcs <- 12
+ADT_pcs <- 4
 
 set.seed(0)
 # UMAP of gene expression
 umap_data <- group_cells(seurat_data, sample, save_dir, nPCs = RNA_pcs,
-  resolution = 0.8, assay = seurat_assay, HTO = HTO)
+  resolution = 0.5, assay = seurat_assay, HTO = HTO)
 
 seurat_data <- umap_data$object
 
 gene_plots <- umap_data$plots
 
-plotDimRed(seurat_data, col_by = "Ins1", plot_type = "rna.umap")
-plotDimRed(seurat_data, col_by = "Ins2", plot_type = "rna.umap")
-plotDimRed(seurat_data, col_by = "Gcg", plot_type = "rna.umap")
-plotDimRed(seurat_data, col_by = "Sst", plot_type = "rna.umap")
-plotDimRed(seurat_data, col_by = "tdTomato", plot_type = "rna.umap")
+DefaultAssay(seurat_data) <- "ADT"
+plot_list <- plotDimRed(seurat_data, col_by = adt_list,
+                        plot_type = "rna.umap",
+                        assay = "ADT")
+
 
 if(ADT){
+  if(adt_PCA){
+    adt_reduction <- "apca"
+  } else{
+    adt_reduction <- "pdsb"
+  }
   # UMAP of surface protein
   umap_data <- group_cells(seurat_data, sample, save_dir, nPCs = ADT_pcs,
-    resolution = 0.6, assay = "ADT", HTO = TRUE)
+    resolution = 0.2, assay = "ADT", HTO = HTO, reduction = adt_reduction)
 
   seurat_data <- umap_data$object
 
   adt_plots <- umap_data$plots
 
 
+  plots <- featDistPlot(seurat_data, geneset = adt_list,
+                       sep_by = "ADT_cluster", combine = FALSE,
+                       assay = "ADT")
+  
   # WNN ------------------------------------------------------------------------
   # Identify multimodal neighbors. These will be stored in the neighbors slot, 
   # and can be accessed using bm[['weighted.nn']]
@@ -125,7 +176,7 @@ if(ADT){
     weight_name <- "RNA.weight"
   }
   seurat_data <- FindMultiModalNeighbors(
-    seurat_data, reduction.list = list(pca_slot, "apca"), 
+    seurat_data, reduction.list = list(pca_slot, adt_reduction), 
     dims.list = list(1:RNA_pcs, 1:ADT_pcs),
     modality.weight.name = c(weight_name, "ADT.weight")
   )
@@ -134,17 +185,17 @@ if(ADT){
   seurat_data <- RunUMAP(seurat_data, nn.name = "weighted.nn",
                 reduction.name = "wnn.umap", reduction.key = "wnnUMAP_")
   seurat_data <- FindClusters(seurat_data, graph.name = "wsnn",
-                                algorithm = 3, resolution = 2, verbose = FALSE)
+                                algorithm = 3, resolution = 0.6, verbose = FALSE)
 
   seurat_data[["combined_cluster"]] <- Idents(seurat_data)
-  col_by_list <- c("combined_cluster", "orig.ident", "CD4-A0072", "CD8-A0046")
+  col_by_list <- c("combined_cluster", "orig.ident", adt_list)
   if(HTO){
     col_by_list <- c(col_by_list, "HTO_classification")
   }
   save_plot <- file.path(save_dir, "images", "combined_umap.pdf")
   plot_list <- plotDimRed(sample_object = seurat_data,
                           save_plot = save_plot,
-                          col_by = col_by_list, return_plot = TRUE,
+                          col_by = col_by_list,
                           plot_type = "wnn.umap")
   VlnPlot(seurat_data, features = "RNA.weight",
           group.by = 'combined_cluster',

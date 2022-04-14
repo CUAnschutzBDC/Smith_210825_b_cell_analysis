@@ -17,6 +17,7 @@ sample_info <- sample_list[[sample]]
 
 ```{r {{sample}}-umap, fig.height=8, fig.width=8}
 seurat_object <- sample_info$seurat_object
+cluster_colors <- sample_info$cluster_colors
 
 plot1 <- plotDimRed(seurat_object, col_by = "orig.ident",
            plot_type = "rna.umap", color = sample_colors)[[1]]
@@ -24,7 +25,10 @@ plot2 <- plotDimRed(seurat_object, col_by = c("nCount_RNA",
                                               "nFeature_RNA",
                                               "percent.mt"),
                     plot_type = "rna.umap")
-plot_grid(plot1, plot2[[1]], plot2[[2]], plot2[[3]],
-          labels = c("A", "B", "C", "D"),
+plot3 <- plotDimRed(seurat_object, col_by = "RNA_cluster",
+                    color = cluster_colors, plot_type = "rna.umap")[[1]]
+plot_grid(plot1, plot2[[1]], plot2[[2]], plot2[[3]], plot3,
+          labels = c("A", "B", "C", "D", "E"),
+          nrow = 3, ncol = 2,
           align = "hv", axis = "lr")
 ```
