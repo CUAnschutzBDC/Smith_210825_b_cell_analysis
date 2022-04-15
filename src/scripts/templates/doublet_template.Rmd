@@ -15,7 +15,7 @@ sample_info <- sample_list[[sample]]
 
 ###`r extra_pound_doublet` **`r sect_title`**
 
-```{r {{sample}}-doublet, fig.height=4, fig.width=4}
+```{r {{sample}}-doublet, fig.height=3, fig.width=4}
 doublet_object <- readRDS(sample_info$seurat_doublet_path)
 
 plotDimRed(doublet_object,

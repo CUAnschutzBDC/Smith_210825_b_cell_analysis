@@ -15,7 +15,7 @@ sample_info <- sample_list[[sample]]
 
 ###`r extra_pound_celltype` **`r sect_title`**
 
-```{r {{sample}}-celltype, fig.height=8, fig.width=8}
+```{r {{sample}}-celltype, fig.height=6, fig.width=8}
 seurat_object <- sample_info$seurat_object
 
 if(sample_info$type == "single"){
