@@ -1,0 +1,734 @@
+---
+title: "Analysis of healthy B cells"
+author: "Kristen Wells"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    highlight: "tango"
+    df_print: "paged"
+    code_folding: "hide"
+    self_contained: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  message = F, 
+  warning = F,
+   comment = ""
+)
+library(here)
+
+#knitr::opts_knit$set(root.dir = here())
+```
+
+# Summary
+
+```{r, include = FALSE}
+library(Seurat)
+library(tidyverse)
+library(cowplot)
+library(here)
+library(scAnalysisR)
+library(knitr)
+library(LaCroixColoR)
+
+# Set theme
+ggplot2::theme_set(ggplot2::theme_classic(base_size = 10))
+
+# Sample information that also includes if it is combined or not
+samples <- list("healthy_bcells_all_subset" = c("single"))
+raw_dir <- "healthy_bcells_all"
+
+ADT <- TRUE
+
+# Set directories
+base_dir <- here()
+
+# Change to be the cell types of the analysis
+# colors from https://medialab.github.io/iwanthue/
+
+sample_colors <- LaCroixColoR::lacroix_palette("Coconut", 3)
+sample_colors <- sample_colors[1]
+names(sample_colors) <- c("healthy_bcells_all_subset")
+
+celltype_colors <- LaCroixColoR::lacroix_palette("Pamplemousse", 2)
+names(celltype_colors) <- c("Mem_B", "Bulk_B")
+
+protein_colors_adt <- c("IgM" = "#E41A1C",
+                        "IgD" = "#377EB8",
+                        "CXCR5.1" = "#4DAF4A",
+                        "CD21" = "#984EA3",
+                        "CD27.1" = "#FF7F00")
+
+protein_colors_rna <- c("IGHM" = "#E41A1C",
+                        "IGHD" = "#377EB8",
+                        "CXCR5" = "#4DAF4A",
+                        "CR2" = "#984EA3",
+                        "CD27" = "#FF7F00")
+
+
+# Read in all data
+sample_list <- lapply(names(samples), function(x){
+  base_dir_proj <- file.path(base_dir, "results", x)
+  raw_save_dir <- file.path(base_dir, "results", raw_dir, "R_analysis")
+  save_dir <- file.path(base_dir_proj, "R_analysis")
+  seurat_data <- readRDS(file.path(save_dir,
+                                   "rda_obj", "seurat_processed.rds"))
+  unprocessed_path <- file.path(raw_save_dir, "rda_obj", "seurat_unfilt.rds")
+  doublet_path <- file.path(raw_save_dir, "rda_obj", "seurat_doublet.rds")
+  subset_path <- file.path(save_dir, "rda_obj", "seurat_clust6.rds")
+  
+  nColors <- length(unique(seurat_data$RNA_cluster))
+  cluster_colors <- grDevices::colorRampPalette(
+    RColorBrewer::brewer.pal(9, "Set1"))(nColors)
+   names(cluster_colors) <- unique(seurat_data$RNA_cluster)
+   
+   celltype_cluster_colors <- cluster_colors
+   names(celltype_cluster_colors) <- unique(seurat_data$celltype_cluster)
+
+  return_data <- list("seurat_object" = seurat_data,
+                      "seurat_unprocessed_path" = unprocessed_path,
+                      "seurat_doublet_path" = doublet_path,
+                      "subset_path" = subset_path,
+                      "type" = samples[[x]][1],
+                      "cluster_colors" = cluster_colors,
+                      "celltype_cluster_colors" = celltype_cluster_colors,
+                      "save_dir" = save_dir)
+  
+})
+
+names(sample_list) <- names(samples)
+
+```
+
+## Quality control {.tabset}
+I first check the quality of all samples by looking at the number of reads per cell, the number of features (genes) per cell, and the percent mitochondrial genes per cell. In cases where the cells were dying, we generally see a higher percent mitochondria. I like to see that most cells have less than 15% of reads mapping to mitochondrial reads.
+
+Here it seems that most cells look pretty good. You have ~1,500 genes per cell. There are definitely some cells with a really high mitochondiral percent.
+My filters
+
+* percent.mt < 10 (all cells with more thant 10% mitochondiral reads are filtered out)
+* nFeature_RNA > 500 (any cells with less than 500 genes were excluded).
+* nFeature_RNA < 4000 (there were a handful of cells with many features. These are generally removed as they are suspected to be doublets)
+* nCount_ADT < 2000 (Any cells with more than 1000 ADT reads were excluded. There were not many.)
+
+
+```{r "plot-quality", echo = F}
+if(ADT){
+  quality_template <- file.path(here(),
+                              "src/scripts/templates/quality_template_ADT.Rmd")
+} else{
+quality_template <- file.path(here(),
+                              "src/scripts/templates/quality_template.Rmd")  
+}
+
+
+quality_chunks <- names(sample_list) %>%
+  map(~knit_expand(file = quality_template, sample = .x))
+```
+
+`r knit_child(text = quality_chunks)`
+
+## Doublet Removal {.tabset}
+I next identify likely doublets using `DoubletFinder` which attempts to model what doublets would look like based on a mixing of the different clusters. The doublets identified are shown below. I filter these out before continuing the analysis.
+
+```{r "plot-doublet", echo = F}
+
+doublet_template <- file.path(here(),
+                              "src/scripts/templates/doublet_template.Rmd")
+
+sample_doublet <- samples[samples == "single"]
+
+doublet_chunks <- names(sample_doublet) %>%
+  map(~knit_expand(file = doublet_template, sample = .x))
+```
+
+`r knit_child(text = doublet_chunks)`
+
+## PCA {.tabset}
+I next do an initial dimensional reduction with using PCA on the top 2000 variable genes. The PCA is not too informative, but it's worth looking at a few metrics.
+
+A) The sample - because there is only one sample, this is mostly just the shape
+B) The number of UMIs seen in each cell. There is some correlation between this and PC2 so we will need to make sure this isn't captured when we make a UMAP.
+C) The number of genes seen in each cell. Again, there is some correlation between this and PC2 so we will need to make sure this isn't captured when we make a UMAP.
+D) The percent mitochondrial reads per cell. We don't want to see much correlation between this and either of the PCs.
+```{r "plot-pca", echo = F}
+
+pca_template <- file.path(here(),
+                          "src/scripts/templates/pca_template.Rmd")
+
+pca_chunks <- names(sample_list) %>%
+  map(~knit_expand(file = pca_template, sample = .x))
+```
+
+`r knit_child(text = pca_chunks)`
+
+## UMAP {.tabset}
+
+I next follow the PCA with a UMAP dimensional reduction. Rather than use genes for UMAP, we use the top PCs (24 for your dataset). I'll plot the same metrics for UMAP as for the PCA.
+
+A) The sample - because there is only one sample, this is mostly just the shape
+B) The number of UMIs seen in each cell. There is some correlation between this and the UMAP. It could be technical or cell type specific. We can decided this based on the gene expression patterns.
+C) The number of genes seen in each cell. There is a little less correlation here, but we do still see a correlation.
+D) The percent mitochondrial reads per cell. There isn't much correlation here which is a good sign.
+E) The clusters identified by my analysis - you can see that there isn't a lot of structure either in the UMAP or the clusters.
+```{r "plot-umap", echo = F}
+
+umap_template <- file.path(here(),
+                           "src/scripts/templates/umap_template.Rmd")
+
+umap_chunks <- names(sample_list) %>%
+  map(~knit_expand(file = umap_template, sample = .x))
+```
+
+`r knit_child(text = umap_chunks)`
+
+## Celltypes {.tabset}
+I named celltypes based using `clustifyr` which uses a reference dataset to name clusters. First, average expression is found for each cluster in the reference dataset, then a correlation is run between the reference cluster and our clusters. I used [The human single cell atlas](https://data.humancellatlas.org/explore/projects/efea6426-510a-4b60-9a19-277e52bfa815/project-matrices) as the reference.
+
+A) UMAP colored by clusters
+B) UMAP colored by cell type defined within each individual sample
+C) Barplot showing the percent of cells that were assigned to each cell type. 
+
+```{r "plot-celltype", echo = F}
+
+celltype_template <- file.path(here(),
+                           "src/scripts/templates/celltype_template.Rmd")
+
+celltype_chunks <- names(sample_list) %>%
+  map(~knit_expand(file = celltype_template, sample = .x))
+```
+
+`r knit_child(text = celltype_chunks)`
+
+## Heatmaps of marker genes {.tabset}
+I next found differentially expressed genes between all of the clusters and cell types to see if this agrees with the cell type naming above. Overall, I'd agree with the cell types. I'm only showing the top 10 markers of each cell type/cluster below.
+
+
+### **Cell types**
+1. Left, expression of DE genes in cell types. The x-axis is colored by celltype. Because most of the cells are B cells, this plot is not very appealing.
+2. Right, expression of DE genes in cell types averaged within each cell type. The x axis is colored by cell type. Because this is average expression, it looks much better.
+```{r cell-type-heatmap, fig.height=8, fig.width=12}
+sample_info <- sample_list[["healthy_bcells_all_subset"]]
+seurat_data <- sample_info$seurat_object
+save_dir <- sample_info$save_dir
+
+# Get marker genes that are saved
+marker_genes_rna <- read.csv(file.path(save_dir,
+                                    "files/DE/RNA_markers_RNA_celltype.csv"),
+                             row.names = 1)
+
+# Pick out the top 10 makers of each cluster
+top10_rna <- marker_genes_rna %>% 
+  dplyr::group_by(cluster) %>% 
+  dplyr::top_n(n = 10, wt = avg_log2FC) %>%
+  dplyr::arrange(cluster)
+
+# Make a heatmap with these genes
+rna_heatmap <- plot_heatmap(seurat_data, top10_rna$gene, "RNA_celltype",
+                            average_expression = FALSE)[[4]]
+
+# Make a heatmap using the average values from each cluster
+rna_heatmap_ave <- plot_heatmap(seurat_data, top10_rna$gene, "RNA_celltype",
+                            average_expression = TRUE)[[4]]
+
+
+plot_grid(rna_heatmap, rna_heatmap_ave,
+          nrow = 1, ncol = 2,
+          align = "hv",
+          axis = "tb")
+```
+
+### **Clusters**
+1. Left, expression of DE genes in clusters. I've colored the x axis by the cluster.
+2. Right, expression of DE genes in clusters averaged within each cluster. I've colored bye x axis by the cluster
+```{r cluster-heatmap, fig.height=20, fig.width=12}
+celltype_cluster_colors <- sample_info$celltype_cluster_colors
+
+# Get marker genes that are saved
+marker_genes_rna <- read.csv(file.path(save_dir,
+                                    "files/DE/RNA_markers_celltype_cluster.csv"),
+                             row.names = 1)
+
+# Pick out the top 10 makers of each cluster
+top10_rna <- marker_genes_rna %>% 
+  dplyr::group_by(cluster) %>% 
+  dplyr::top_n(n = 10, wt = avg_log2FC) %>%
+  dplyr::arrange(cluster)
+
+# Make a heatmap with these genes
+rna_heatmap <- plot_heatmap(seurat_data, top10_rna$gene, "celltype_cluster",
+                            average_expression = FALSE,
+                            colors = celltype_cluster_colors)[[4]]
+
+# Make a heatmap using the average values from each cluster
+rna_heatmap_ave <- plot_heatmap(seurat_data, top10_rna$gene, "celltype_cluster",
+                                average_expression = TRUE,
+                                colors = celltype_cluster_colors)[[4]]
+
+
+
+plot_grid(rna_heatmap, rna_heatmap_ave,
+          nrow = 1, ncol = 2,
+          align = "hv",
+          axis = "tb")
+```
+
+
+## Plots of ADTs {.tabset}
+```{r "plot-adts", echo = F}
+
+assay <- "CLR_ADT"
+group <- "adt"
+type <- "adt"
+
+gene_template <- file.path(here(),
+                           "src/scripts/templates/gene_plot_template.Rmd")
+
+all_gene_template <- file.path(here(),
+                           "src/scripts/templates/all_gene_template.Rmd")
+
+adt_genes <- c("IgM", "IgD", "CXCR5.1", "CD21", "CD27.1")
+
+genes <- adt_genes
+
+all_gene_chunks <- names(sample_list) %>%
+  map(~knit_expand(file = all_gene_template, sample = .x))
+```
+
+`r knit_child(text = all_gene_chunks)`
+
+## Plots of RNA {.tabset}
+```{r "plot-genes", echo = F}
+
+assay <- "RNA"
+group <- "rna"
+type <- "rna"
+
+gene_template <- file.path(here(),
+                           "src/scripts/templates/gene_plot_template.Rmd")
+
+all_gene_template <- file.path(here(),
+                           "src/scripts/templates/all_gene_template.Rmd")
+
+rna_genes <- c("CR2", # CD21,
+               "CD27",
+               "CXCR5",
+               "IGHD", # IgD
+               "IGHM", # IgM
+               "XBP1",
+               "IRF4",
+               "CD38",
+               "JCHAIN",
+               "ITGAX", #Cd11c
+               "IGHG2",
+               "IGHG1",
+               "FAS", #CD95
+               "FCRL5"
+)
+
+genes <- rna_genes
+
+
+all_gene_chunks <- names(sample_list) %>%
+  map(~knit_expand(file = all_gene_template, sample = .x))
+```
+
+`r knit_child(text = all_gene_chunks)`
+
+## Density plots ADT {.tabset}
+I next looked at a density plot of each protein to see if there was any patterns that could be used to find cutoffs for identifying your subset.
+
+```{r "plot-adt-density", echo = F}
+plotting_list <- adt_genes
+
+group <- "adt"
+
+name <- "adt"
+
+protein_colors <- protein_colors_adt
+
+density_template <- file.path(here(),
+                           "src/scripts/templates/density_template.Rmd")
+
+density_chunks <- names(sample_list) %>%
+  map(~knit_expand(file = density_template, sample = .x, group = group))
+```
+
+`r knit_child(text = density_chunks)`
+
+## Density plots ADT no CD27 {.tabset}
+I have repeated the density plots without CD27 so it is easier to visualize patterns.
+```{r "plot-adt-density-no-cd27", echo = F}
+plotting_list <- c("IgM", "IgD", "CXCR5.1", "CD21")
+
+name <- "adt_no_cd27"
+
+protein_colors <- protein_colors_adt
+
+density_template <- file.path(here(),
+                           "src/scripts/templates/density_template.Rmd")
+
+density_chunks <- names(sample_list) %>%
+  map(~knit_expand(file = density_template, sample = .x, group = group))
+```
+
+`r knit_child(text = density_chunks)`
+
+## Density plots RNA {.tabset}
+I also tried with the RNA, but there wasn't much expression. This definitely looks a bit better with our deeper sequencing.
+```{r "plot-rna-density", echo = F}
+plotting_list <- rna_genes
+
+group <- "rna"
+
+name <- "rna"
+
+protein_colors <- protein_colors_rna
+
+density_template <- file.path(here(),
+                           "src/scripts/templates/density_template.Rmd")
+
+density_chunks <- names(sample_list) %>%
+  map(~knit_expand(file = density_template, sample = .x, group = group))
+```
+
+`r knit_child(text = density_chunks)`
+
+## Gating based on Zach's input {.tabset}
+
+```{r}
+ADT_data <- GetAssayData(seurat_data, assay = "CLR_ADT", slot = "data") %>%
+  t %>%
+  data.frame
+
+# CD27 - from Zach use top 20%
+cd27_cutoff <- quantile(ADT_data$CD27.1, probs = .8)
+
+# IgM - from zach bottom 20%
+igm_cutoff <- quantile(ADT_data$IgM, prob = 0.2)
+
+# IgD cutoff - a little less than 1, at the plateau
+igd_cutoff <- quantile(ADT_data$IgD, prob = 0.5)
+
+# CD21 cutoff CD21 Bottom 10-15% Maybe the bump around 0.5?
+cd21_cutoff <- quantile(ADT_data$CD21, prob = 0.1)
+
+ADT_data_long <- ADT_data %>%
+  tidyr::pivot_longer(cols = all_of(colnames(.)), names_to = "protein",
+                                    values_to = "value")
+```
+
+### **IgM**
+
+```{r, fig.width=4, fig.height=4}
+# Plots of cutoffs
+IgM_plot <- ADT_data_long %>%
+  dplyr::filter(protein == "IgM") %>%
+  ggplot2::ggplot(ggplot2::aes(x = value, fill = protein)) +
+    ggplot2::geom_density() +
+    ggplot2::scale_fill_manual(values = protein_colors_adt) + 
+    ggplot2::geom_vline(xintercept = igm_cutoff)
+
+print(IgM_plot)
+```
+
+### **IgD**
+
+```{r, fig.width=4, fig.height=4}
+# Plots of cutoffs
+IgD_plot <- ADT_data_long %>%
+  dplyr::filter(protein == "IgD") %>%
+  ggplot2::ggplot(ggplot2::aes(x = value, fill = protein)) +
+    ggplot2::geom_density() +
+    ggplot2::scale_fill_manual(values = protein_colors_adt) + 
+    ggplot2::geom_vline(xintercept = igd_cutoff)
+
+print(IgD_plot)
+```
+
+### **CD21**
+
+```{r, fig.width=4, fig.height=4}
+# Plots of cutoffs
+CD21_plot <- ADT_data_long %>%
+  dplyr::filter(protein == "CD21") %>%
+  ggplot2::ggplot(ggplot2::aes(x = value, fill = protein)) +
+    ggplot2::geom_density() +
+    ggplot2::scale_fill_manual(values = protein_colors_adt) + 
+    ggplot2::geom_vline(xintercept = cd21_cutoff)
+
+print(CD21_plot)
+```
+
+## Cells that match your cutoffs {.tabset}
+I next found the cells that matched each cutoff (low IgM, high IgD, low CD21) and counted the number of cells that passed each filter.
+
+The scores are 0-3 where 0 means the cells didn't pass any filter and 3 means the cell passed all filters.
+
+There were only 70 cells that passed all of the filters
+
+```{r}
+table(seurat_data$pass_filters)
+```
+
+### UMAP for each filter
+
+A) The UMAP colored by cells passing IgM cutoff
+B) The UMAP colored by cells passing IgD cutoff
+C) The UMAP colored by cells passing CD21 cutoff
+```{r, fig.width=8, fig.height=8}
+plot_list <- plotDimRed(seurat_data,
+                        c("IgM_cutoff", "IgD_cutoff", "CD21_cutoff"),
+                        plot_type = "rna.umap")
+
+
+plot_grid(plotlist = plot_list, align = "hv", axis = "lr",
+          nrow = 2, ncol = 2, labels = c("A", "B", "C"))
+```
+
+### Cells with matching all 3
+And they didn't seem to align to any particular cluster (maybe a few more in cluster 6?)
+
+A) The UMAP colored by the number of protein cutoffs met by the cell
+B) The UMAP with only cells that matched all cutoffs colored
+C) The UMAP with only cells that matched all cutoffs colored by cluster
+```{r, fig.width=8, fig.height=8}
+plot_1 <- plotDimRed(seurat_data, "pass_filters", plot_type = "rna.umap")[[1]]
+
+plot_2 <- plotDimRed(seurat_data, "pass_filters",
+                     plot_type = "rna.umap", highlight_group = TRUE,
+                     group = 3, meta_data_col = "pass_filters")[[1]]
+
+plot_3 <- plotDimRed(seurat_data, "celltype_cluster",
+                     plot_type = "rna.umap", highlight_group = TRUE,
+                     group = 3, meta_data_col = "pass_filters",
+                     color = celltype_cluster_colors)[[1]]
+
+plot_grid(plot_1, plot_2, plot_3, align = "hv", axis = "lr",
+          nrow = 2, ncol = 2, labels = c("A", "B", "C"))
+```
+
+
+Below I'm showing the number of cells that match your cutoffs in each cluster.
+* celltype_cluster is the name of the cluster with the cell type appended to make it easier to see
+* n is the number of cells within that cluster that passed all cutoffs
+* total is the total number of cells in the cluster
+* fraction is n/total
+```{r}
+seurat_data[[]] %>%
+  dplyr::select(celltype_cluster, pass_filters) %>%
+  dplyr::group_by(celltype_cluster, .drop = FALSE) %>%
+  dplyr::count(pass_filters) %>%
+  dplyr::group_by(celltype_cluster, .drop = FALSE) %>%
+  dplyr::mutate(total = sum(n)) %>%
+  dplyr::ungroup() %>%
+  dplyr::mutate(fraction = n/total) %>%
+  dplyr::filter(pass_filters == 3) %>%
+  dplyr::select(celltype_cluster, n, total, fraction)
+
+```
+
+### Cells matching 2
+It seems like two cutoffs is more promising, especially looking at cluster 6.
+
+A) The UMAP colored by the number of protein cutoffs met by the cell
+B) The UMAP with only cells that matched all cutoffs colored
+C) The UMAP with only cells that matched all cutoffs colored by cluster
+```{r, fig.width=8, fig.height=8}
+plot_1 <- plotDimRed(seurat_data, "pass_filters", plot_type = "rna.umap")[[1]]
+
+plot_2 <- plotDimRed(seurat_data, "pass_filters",
+                     plot_type = "rna.umap", highlight_group = TRUE,
+                     group = 2, meta_data_col = "pass_filters")[[1]]
+
+plot_3 <- plotDimRed(seurat_data, "celltype_cluster",
+                     plot_type = "rna.umap", highlight_group = TRUE,
+                     group = 2, meta_data_col = "pass_filters",
+                     color = celltype_cluster_colors)[[1]]
+
+plot_grid(plot_1, plot_2, plot_3, align = "hv", axis = "lr",
+          nrow = 2, ncol = 2, labels = c("A", "B", "C"))
+```
+
+Below I'm showing the number of cells that match your cutoffs in each cluster.
+* celltype_cluster is the name of the cluster with the cell type appended to make it easier to see
+* n is the number of cells within that cluster that passed all cutoffs
+* total is the total number of cells in the cluster
+* fraction is n/total
+```{r}
+seurat_data[[]] %>%
+  dplyr::select(celltype_cluster, pass_filters) %>%
+  dplyr::group_by(celltype_cluster, .drop = FALSE) %>%
+  dplyr::count(pass_filters) %>%
+  dplyr::group_by(celltype_cluster, .drop = FALSE) %>%
+  dplyr::mutate(total = sum(n)) %>%
+  dplyr::ungroup() %>%
+  dplyr::mutate(fraction = n/total) %>%
+  dplyr::filter(pass_filters == 2) %>%
+  dplyr::select(celltype_cluster, n, total, fraction)
+
+```
+
+# Cluster 6 analysis
+I next subset the data to only cluster 6 and repeated the analysis pipeline (including normalization, finding variable genes, PCA, UMAP and clustering).
+
+Overall, this seemed to work. The clustering produced cell populations with different levels of IgM, IgD, and FCRL5.
+
+I clustered both using the RNA alone and using a weighted combination of the RNA and ADT (surface protein). Generally, a similar weight was given to both the RNA and ADT for all cells. Overall, the results of the two clustering approaches are similar but not identical. Based on my understanding, your subset of interest would be cluster 1 from the RNA custering and cluster 2 from the combined clutering. I am showing violin plots for both the RNA clustering and the combined clustering below
+
+## Clustering based on RNA alone
+
+### Plots of ADTs {.tabset}
+```{r "plot-adts-cluster6", echo = F}
+merged_seurat <- readRDS(sample_info$subset_path)
+
+size <- 1.25
+
+cluster_colors <- LaCroixColoR::lacroix_palette(name = "Coconut",
+                                                n = 3)
+
+cluster_colors_RNA <- cluster_colors[1:2]
+
+assay <- "CLR_ADT"
+group <- "adt_subset"
+type <- "adt"
+sample <- "subset"
+
+sep_1 <- violin_col_by_1 <- "RNA_cluster"
+colors_1 <- cluster_colors_RNA
+umap_cols_1 <- colors_1
+
+plot_type = "rna.umap"
+
+extra_pound_gene <- "#"
+
+gene_template <- file.path(here(),
+                           "src/scripts/templates/gene_plot_template_short.Rmd")
+
+adt_genes <- c("IgM", "IgD", "CXCR5.1", "CD21", "CD27.1")
+
+genes <- adt_genes
+
+gene_chunks <- genes %>%
+  map(~knit_expand(file = gene_template, sample = sample, group = group,
+                   gene = .x, subset = FALSE))
+```
+
+`r knit_child(text = gene_chunks)`
+
+### Plots of RNA {.tabset}
+```{r "plot-genes-cluster6", echo = F}
+
+assay <- "RNA"
+group <- "rna_subset"
+type <- "rna"
+
+extra_pound_gene <- "#"
+
+rna_genes <- c("CR2", # CD21,
+               "CD27",
+               "CXCR5",
+               "IGHD", # IgD
+               "IGHM", # IgM
+               "XBP1",
+               "IRF4",
+               "CD38",
+               "JCHAIN",
+               "ITGAX", #Cd11c
+               "IGHG2",
+               "IGHG1",
+               "FAS", #CD95
+               "FCRL5"
+)
+
+genes <- rna_genes
+
+gene_template <- file.path(here(),
+                           "src/scripts/templates/gene_plot_template_short.Rmd")
+
+gene_chunks <- genes %>%
+  map(~knit_expand(file = gene_template, sample = sample, group = group,
+                   gene = .x, subset = FALSE))
+```
+
+`r knit_child(text = gene_chunks)`
+
+## Clustering based on RNA and ADT
+
+### Plots of ADTs {.tabset}
+```{r "plot-adts-cluster6-wnn", echo = F}
+plot_type <- "wnn.umap"
+
+size <- 1.25
+
+cluster_colors <- LaCroixColoR::lacroix_palette(name = "Coconut",
+                                                n = 3)
+
+cluster_colors_RNA <- cluster_colors[1:2]
+
+assay <- "CLR_ADT"
+group <- "adt_wnn"
+type <- "adt"
+sample <- "subset"
+
+sep_1 <- violin_col_by_1 <- "combined_cluster"
+colors_1 <- cluster_colors
+umap_cols_1 <- colors_1
+
+extra_pound_gene <- "#"
+
+gene_template <- file.path(here(),
+                           "src/scripts/templates/gene_plot_template_short.Rmd")
+
+adt_genes <- c("IgM", "IgD", "CXCR5.1", "CD21", "CD27.1")
+
+genes <- adt_genes
+
+gene_chunks <- genes %>%
+  map(~knit_expand(file = gene_template, sample = sample, group = group,
+                   gene = .x, subset = FALSE))
+```
+
+`r knit_child(text = gene_chunks)`
+
+### Plots of RNA {.tabset}
+```{r "plot-genes-cluster6-wnn", echo = F}
+
+assay <- "RNA"
+group <- "rna_wnn"
+type <- "rna"
+
+extra_pound_gene <- "#"
+
+
+rna_genes <- c("CR2", # CD21,
+               "CD27",
+               "CXCR5",
+               "IGHD", # IgD
+               "IGHM", # IgM
+               "XBP1",
+               "IRF4",
+               "CD38",
+               "JCHAIN",
+               "ITGAX", #Cd11c
+               "IGHG2",
+               "IGHG1",
+               "FAS", #CD95
+               "FCRL5"
+)
+
+genes <- rna_genes
+
+gene_template <- file.path(here(),
+                           "src/scripts/templates/gene_plot_template_short.Rmd")
+
+gene_chunks <- genes %>%
+  map(~knit_expand(file = gene_template, sample = sample, group = group,
+                   gene = .x, subset = FALSE))
+```
+
+`r knit_child(text = gene_chunks)`

@@ -9,3 +9,4 @@ results/*/outs/*
 logs
 .Rproj.user
 src/scripts/*html
+src/scripts/*/*.html
