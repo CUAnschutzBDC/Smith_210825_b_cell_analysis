@@ -69,7 +69,6 @@ protein_colors_rna <- c("IGHM" = "#E41A1C",
                         "CR2" = "#984EA3",
                         "CD27" = "#FF7F00")
 
-
 # Read in all data
 sample_list <- lapply(names(samples), function(x){
   base_dir_proj <- file.path(base_dir, "results", x)
@@ -80,22 +79,59 @@ sample_list <- lapply(names(samples), function(x){
   unprocessed_path <- file.path(raw_save_dir, "rda_obj", "seurat_unfilt.rds")
   doublet_path <- file.path(raw_save_dir, "rda_obj", "seurat_doublet.rds")
   subset_path <- file.path(save_dir, "rda_obj", "seurat_clust6.rds")
+  tcell_path <- file.path(save_dir, "rda_obj", "seurat_tcells.rds")
   
-  nColors <- length(unique(seurat_data$RNA_cluster))
-  cluster_colors <- grDevices::colorRampPalette(
-    RColorBrewer::brewer.pal(9, "Set1"))(nColors)
-   names(cluster_colors) <- unique(seurat_data$RNA_cluster)
+  cluster_colors <- c("0" = "#69ba3d",
+                      "1" = "#bf9b31",
+                      "2" = "#6477ce",
+                      "3" = "#d15131",
+                      "4" = "#4c9e8e",
+                      "5" = "#cc4570",
+                      "6" = "#924bdb",
+                      "7" = "#648d4f",
+                      "8" = "#a06846",
+                      "9" = "#7184b0")
+  
+  all_cluster_colors <- c("6.0" = "#924bdb",
+                          "0" = "#69ba3d",
+                          "6.1" = "#9a43a4",
+                          "1" = "#bf9b31",
+                          "2" = "#6477ce",
+                          "3" = "#d15131",
+                          "4" = "#4c9e8e",
+                          "5" = "#cc4570",
+                          "7" = "#648d4f",
+                          "6.2" = "#985978",
+                          "8" = "#a06846",
+                          "9" = "#7184b0")
    
    celltype_cluster_colors <- cluster_colors
-   names(celltype_cluster_colors) <- unique(seurat_data$celltype_cluster)
-
+   celltype_cluster <- levels(seurat_data$celltype_cluster)
+   celltype_cluster <- celltype_cluster[order(match(gsub(".*_", "",
+                                                         celltype_cluster),
+                                names(cluster_colors)))]
+   names(celltype_cluster_colors) <- celltype_cluster
+   
+   seurat_data$celltype_new_cluster <- paste0(seurat_data$RNA_celltype, "_",
+                                              seurat_data$new_cluster)
+   
+   all_celltype_cluster_colors <- all_cluster_colors
+   all_celltype_cluster <- unique(seurat_data$celltype_new_cluster)
+   all_celltype_cluster <- all_celltype_cluster[order(match(gsub(".*_", "",
+                                                         all_celltype_cluster),
+                                names(all_cluster_colors)))]
+   names(all_celltype_cluster_colors) <- all_celltype_cluster
+   
   return_data <- list("seurat_object" = seurat_data,
                       "seurat_unprocessed_path" = unprocessed_path,
                       "seurat_doublet_path" = doublet_path,
                       "subset_path" = subset_path,
+                      "tcell_path" = tcell_path,
                       "type" = samples[[x]][1],
                       "cluster_colors" = cluster_colors,
                       "celltype_cluster_colors" = celltype_cluster_colors,
+                      "all_cluster_colors" = all_cluster_colors,
+                      "all_celltype_cluster_colors" = all_celltype_cluster_colors,
                       "save_dir" = save_dir)
   
 })
@@ -244,7 +280,7 @@ plot_grid(rna_heatmap, rna_heatmap_ave,
 
 ### **Clusters**
 1. Left, expression of DE genes in clusters. I've colored the x axis by the cluster.
-2. Right, expression of DE genes in clusters averaged within each cluster. I've colored bye x axis by the cluster
+2. Right, expression of DE genes in clusters averaged within each cluster. I've colored by x axis by the cluster
 ```{r cluster-heatmap, fig.height=20, fig.width=12}
 celltype_cluster_colors <- sample_info$celltype_cluster_colors
 
@@ -327,7 +363,8 @@ rna_genes <- c("CR2", # CD21,
                "IGHG2",
                "IGHG1",
                "FAS", #CD95
-               "FCRL5"
+               "FCRL5",
+               "NR4A1"
 )
 
 genes <- rna_genes
@@ -401,6 +438,18 @@ density_chunks <- names(sample_list) %>%
 ## Gating based on Zach's input {.tabset}
 
 ```{r}
+tcell_object <- readRDS(sample_info$tcell_path)
+
+tcell_ADT_data <- GetAssayData(tcell_object, assay = "CLR_ADT", slot = "data") %>%
+  t %>%
+  data.frame
+
+tcell_ADT_data_long <- tcell_ADT_data %>%
+  tidyr::pivot_longer(cols = all_of(colnames(.)), names_to = "protein",
+                                    values_to = "value")
+
+igm_cutoff <- quantile(tcell_ADT_data$IgM, prob = 0.95)
+
 ADT_data <- GetAssayData(seurat_data, assay = "CLR_ADT", slot = "data") %>%
   t %>%
   data.frame
@@ -409,7 +458,7 @@ ADT_data <- GetAssayData(seurat_data, assay = "CLR_ADT", slot = "data") %>%
 cd27_cutoff <- quantile(ADT_data$CD27.1, probs = .8)
 
 # IgM - from zach bottom 20%
-igm_cutoff <- quantile(ADT_data$IgM, prob = 0.2)
+#igm_cutoff <- quantile(ADT_data$IgM, prob = 0.2)
 
 # IgD cutoff - a little less than 1, at the plateau
 igd_cutoff <- quantile(ADT_data$IgD, prob = 0.5)
@@ -423,7 +472,21 @@ ADT_data_long <- ADT_data %>%
 ```
 
 ### **IgM**
+I first defined the IgM cutoff based on the T cells alone. Below is the density plot of only cells defined as T cells with a cutoff keeping only the top 5%
 
+```{r, fig.width=4, fig.height=4}
+# Plots of cutoffs
+IgM_plot <- tcell_ADT_data_long %>%
+  dplyr::filter(protein == "IgM") %>%
+  ggplot2::ggplot(ggplot2::aes(x = value, fill = protein)) +
+    ggplot2::geom_density() +
+    ggplot2::scale_fill_manual(values = protein_colors_adt) + 
+    ggplot2::geom_vline(xintercept = igm_cutoff)
+
+print(IgM_plot)
+```
+
+Here is the same cutoff defined above but plotted on a density plot made with only B cells.
 ```{r, fig.width=4, fig.height=4}
 # Plots of cutoffs
 IgM_plot <- ADT_data_long %>%
@@ -482,7 +545,7 @@ B) The UMAP colored by cells passing IgD cutoff
 C) The UMAP colored by cells passing CD21 cutoff
 ```{r, fig.width=8, fig.height=8}
 plot_list <- plotDimRed(seurat_data,
-                        c("IgM_cutoff", "IgD_cutoff", "CD21_cutoff"),
+                        c("IgM_cutoff", "IgD_cutoff", "CD21_low_cutoff"),
                         plot_type = "rna.umap")
 
 
@@ -497,16 +560,18 @@ A) The UMAP colored by the number of protein cutoffs met by the cell
 B) The UMAP with only cells that matched all cutoffs colored
 C) The UMAP with only cells that matched all cutoffs colored by cluster
 ```{r, fig.width=8, fig.height=8}
+all_celltype_cluster_colors <- sample_info$all_celltype_cluster_colors
+
 plot_1 <- plotDimRed(seurat_data, "pass_filters", plot_type = "rna.umap")[[1]]
 
 plot_2 <- plotDimRed(seurat_data, "pass_filters",
                      plot_type = "rna.umap", highlight_group = TRUE,
                      group = 3, meta_data_col = "pass_filters")[[1]]
 
-plot_3 <- plotDimRed(seurat_data, "celltype_cluster",
+plot_3 <- plotDimRed(seurat_data, "celltype_new_cluster",
                      plot_type = "rna.umap", highlight_group = TRUE,
                      group = 3, meta_data_col = "pass_filters",
-                     color = celltype_cluster_colors)[[1]]
+                     color = all_celltype_cluster_colors)[[1]]
 
 plot_grid(plot_1, plot_2, plot_3, align = "hv", axis = "lr",
           nrow = 2, ncol = 2, labels = c("A", "B", "C"))
@@ -514,21 +579,21 @@ plot_grid(plot_1, plot_2, plot_3, align = "hv", axis = "lr",
 
 
 Below I'm showing the number of cells that match your cutoffs in each cluster.
-* celltype_cluster is the name of the cluster with the cell type appended to make it easier to see
+* celltype_new_cluster is the name of the cluster with the cell type appended to make it easier to see
 * n is the number of cells within that cluster that passed all cutoffs
 * total is the total number of cells in the cluster
 * fraction is n/total
 ```{r}
 seurat_data[[]] %>%
-  dplyr::select(celltype_cluster, pass_filters) %>%
-  dplyr::group_by(celltype_cluster, .drop = FALSE) %>%
+  dplyr::select(celltype_new_cluster, pass_filters) %>%
+  dplyr::group_by(celltype_new_cluster, .drop = FALSE) %>%
   dplyr::count(pass_filters) %>%
-  dplyr::group_by(celltype_cluster, .drop = FALSE) %>%
+  dplyr::group_by(celltype_new_cluster, .drop = FALSE) %>%
   dplyr::mutate(total = sum(n)) %>%
   dplyr::ungroup() %>%
   dplyr::mutate(fraction = n/total) %>%
   dplyr::filter(pass_filters == 3) %>%
-  dplyr::select(celltype_cluster, n, total, fraction)
+  dplyr::select(celltype_new_cluster, n, total, fraction)
 
 ```
 
@@ -545,31 +610,31 @@ plot_2 <- plotDimRed(seurat_data, "pass_filters",
                      plot_type = "rna.umap", highlight_group = TRUE,
                      group = 2, meta_data_col = "pass_filters")[[1]]
 
-plot_3 <- plotDimRed(seurat_data, "celltype_cluster",
+plot_3 <- plotDimRed(seurat_data, "celltype_new_cluster",
                      plot_type = "rna.umap", highlight_group = TRUE,
                      group = 2, meta_data_col = "pass_filters",
-                     color = celltype_cluster_colors)[[1]]
+                     color = all_celltype_cluster_colors)[[1]]
 
 plot_grid(plot_1, plot_2, plot_3, align = "hv", axis = "lr",
           nrow = 2, ncol = 2, labels = c("A", "B", "C"))
 ```
 
 Below I'm showing the number of cells that match your cutoffs in each cluster.
-* celltype_cluster is the name of the cluster with the cell type appended to make it easier to see
+* celltype_new_cluster is the name of the cluster with the cell type appended to make it easier to see
 * n is the number of cells within that cluster that passed all cutoffs
 * total is the total number of cells in the cluster
 * fraction is n/total
 ```{r}
 seurat_data[[]] %>%
-  dplyr::select(celltype_cluster, pass_filters) %>%
-  dplyr::group_by(celltype_cluster, .drop = FALSE) %>%
+  dplyr::select(celltype_new_cluster, pass_filters) %>%
+  dplyr::group_by(celltype_new_cluster, .drop = FALSE) %>%
   dplyr::count(pass_filters) %>%
-  dplyr::group_by(celltype_cluster, .drop = FALSE) %>%
+  dplyr::group_by(celltype_new_cluster, .drop = FALSE) %>%
   dplyr::mutate(total = sum(n)) %>%
   dplyr::ungroup() %>%
   dplyr::mutate(fraction = n/total) %>%
   dplyr::filter(pass_filters == 2) %>%
-  dplyr::select(celltype_cluster, n, total, fraction)
+  dplyr::select(celltype_new_cluster, n, total, fraction)
 
 ```
 
@@ -591,15 +656,13 @@ size <- 1.25
 cluster_colors <- LaCroixColoR::lacroix_palette(name = "Coconut",
                                                 n = 3)
 
-cluster_colors_RNA <- cluster_colors[1:2]
-
 assay <- "CLR_ADT"
 group <- "adt_subset"
 type <- "adt"
 sample <- "subset"
 
 sep_1 <- violin_col_by_1 <- "RNA_cluster"
-colors_1 <- cluster_colors_RNA
+colors_1 <- cluster_colors
 umap_cols_1 <- colors_1
 
 plot_type = "rna.umap"
@@ -668,7 +731,6 @@ size <- 1.25
 cluster_colors <- LaCroixColoR::lacroix_palette(name = "Coconut",
                                                 n = 3)
 
-cluster_colors_RNA <- cluster_colors[1:2]
 
 assay <- "CLR_ADT"
 group <- "adt_wnn"
@@ -732,3 +794,77 @@ gene_chunks <- genes %>%
 ```
 
 `r knit_child(text = gene_chunks)`
+
+
+## Heatmap of cluster 6 DE
+1. Left, expression of DE genes in clusters. I've colored the x axis by the cluster.
+2. Right, expression of DE genes in clusters averaged within each cluster. I've colored bye x axis by the cluster
+```{r cluster-6-heatmap, fig.height=13, fig.width=12}
+new_colors <- sample_info$all_celltype_cluster_colors
+
+# Get marker genes that are saved
+marker_genes_rna <- read.csv(file.path(save_dir,
+                    "files/DE/RNA_markers_cluster_6_combined_cluster.csv"),
+                             row.names = 1)
+
+
+
+# Pick out the top 10 makers of each cluster
+top10_rna <- marker_genes_rna %>% 
+  dplyr::group_by(cluster) %>% 
+  dplyr::top_n(n = 20, wt = avg_log2FC) %>%
+  dplyr::arrange(cluster)
+
+# Make a heatmap with these genes
+rna_heatmap <- plot_heatmap(seurat_data, top10_rna$gene, "celltype_new_cluster",
+                            average_expression = FALSE,
+                            colors = new_colors)[[4]]
+
+# Make a heatmap using the average values from each cluster
+rna_heatmap_ave <- plot_heatmap(seurat_data, top10_rna$gene,
+                                "celltype_new_cluster",
+                                average_expression = TRUE,
+                                colors = new_colors)[[4]]
+
+
+
+plot_grid(rna_heatmap, rna_heatmap_ave,
+          nrow = 1, ncol = 2,
+          align = "hv",
+          axis = "tb")
+```
+
+## Heatmap of DE with cluster 6 separated
+1. Left, expression of DE genes in clusters. I've colored the x axis by the cluster.
+2. Right, expression of DE genes in clusters averaged within each cluster. I've colored by x axis by the cluster
+```{r cluster-heatmap-cluster6-sep, fig.height=20, fig.width=12}
+# Get marker genes that are saved
+marker_genes_rna <- read.csv(file.path(save_dir,
+                                    "files/DE/RNA_markers_celltype_cluster.csv"),
+                             row.names = 1)
+
+# Pick out the top 10 makers of each cluster
+top10_rna <- marker_genes_rna %>% 
+  dplyr::group_by(cluster) %>% 
+  dplyr::top_n(n = 10, wt = avg_log2FC) %>%
+  dplyr::arrange(cluster)
+
+# Make a heatmap with these genes
+rna_heatmap <- plot_heatmap(seurat_data, top10_rna$gene,
+                            "celltype_new_cluster",
+                            average_expression = FALSE,
+                            colors = new_colors)[[4]]
+
+# Make a heatmap using the average values from each cluster
+rna_heatmap_ave <- plot_heatmap(seurat_data, top10_rna$gene,
+                                "celltype_new_cluster",
+                                average_expression = TRUE,
+                                colors = new_colors)[[4]]
+
+
+
+plot_grid(rna_heatmap, rna_heatmap_ave,
+          nrow = 1, ncol = 2,
+          align = "hv",
+          axis = "tb")
+```

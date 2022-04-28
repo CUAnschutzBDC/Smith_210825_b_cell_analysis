@@ -78,5 +78,41 @@ if(ADT){
                                     save_dir = save_dir)
 }
 
+# DE IgMlo IgD+ CD21+ vs CD27- IgMlo IgD+ CD21- --------------------------------
+seurat_data$cd21_level <- "none"
+
+seurat_data$cd21_level[seurat_data$IgM_cutoff &
+                         seurat_data$IgD_cutoff & 
+                         seurat_data$CD21_high_cutoff] <- "CD21_pos"
+
+seurat_data$cd21_level[seurat_data$IgM_cutoff &
+                         seurat_data$IgD_cutoff & 
+                         seurat_data$CD21_low_cutoff] <- "CD21_neg"
+
+table(seurat_data$cd21_level)
+
+Idents(seurat_data) <- "cd21_level"
+marker_list <- FindMarkers(seurat_data, ident.1 = "CD21_pos",
+                           ident.2 = "CD21_neg") 
+
+save_list <- marker_list %>%
+  dplyr::filter(p_val_adj < 0.05) %>%
+  tibble::rownames_to_column("gene_name")
+
+plotDimRed(seurat_data, col_by = "cd21_level", plot_type = "rna.umap",
+           color = c("none" = "light grey",
+                     "CD21_neg" = "blue",
+                     "CD21_pos" = "red"))
+
+write.csv(marker_list, file.path(save_dir, "files/DE/cd21_de.csv"))
+
+cd21_wb <- openxlsx::createWorkbook()
+
+openxlsx::addWorksheet(wb = cd21_wb, sheetName = "cd21_de")
+openxlsx::writeData(wb = cd21_wb, sheet = "cd21_de", x = save_list)
+
+openxlsx::saveWorkbook(wb = cd21_wb, file = file.path(save_dir,
+                                                      "files/DE/cd21_de.xlsx"),
+                       overwrite = TRUE)
 
 saveRDS(seurat_data, file.path(save_dir, "rda_obj", "seurat_processed.rds"))

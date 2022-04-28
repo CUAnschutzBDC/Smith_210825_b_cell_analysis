@@ -78,4 +78,42 @@ if(ADT){
 }
 
 
+# Pairwise DE ------------------------------------------------------------------
+marker_list <- find_write_markers(seurat_object = seurat_data,
+                                  meta_col = clusters,
+                                  pval = pval,
+                                  logfc = logfc,
+                                  assay = "RNA",
+                                  save_dir = save_dir,
+                                  pairwise = TRUE)
+
+if(ADT){
+  marker_list <- find_write_markers(seurat_object = seurat_data,
+                                    meta_col = clusters,
+                                    pval = pval,
+                                    logfc = logfc,
+                                    assay = "ADT",
+                                    save_dir = save_dir,
+                                    pairwise = TRUE)
+}
+
+
+marker_list <- find_write_markers(seurat_object = seurat_data,
+                                  meta_col = combined_clusters,
+                                  pval = pval,
+                                  logfc = logfc,
+                                  assay = "RNA",
+                                  save_dir = save_dir,
+                                  pairwise = TRUE)
+
+if(ADT){
+  marker_list <- find_write_markers(seurat_object = seurat_data,
+                                    meta_col = combined_clusters,
+                                    pval = pval,
+                                    logfc = logfc,
+                                    assay = "ADT",
+                                    save_dir = save_dir,
+                                    pairwise = TRUE)
+}
+
 saveRDS(seurat_data, file.path(save_dir, "rda_obj", "seurat_clust6.rds"))

@@ -125,7 +125,7 @@ clustree(seurat_data)
 # UMAP of gene expression, think about using a resolution of 5?
 set.seed(0)
 umap_data <- group_cells(seurat_data, sample, save_dir, nPCs = RNA_pcs,
-                         resolution = 0.3, assay = seurat_assay, HTO = HTO)
+                         resolution = 0.4, assay = seurat_assay, HTO = HTO)
 
 seurat_data <- umap_data$object
 

@@ -144,5 +144,34 @@ dsb_norm_prot <- DSBNormalizeProtein(
 # Add to object
 positive_object[["ADT"]] <- CreateAssayObject(data = dsb_norm_prot)
 
+positive_adt_matrix_plot <- t(positive_adt_matrix)
+
+neg_adt_matrix_plot <- t(neg_adt_matrix)
+
+colnames(positive_adt_matrix_plot) <- paste0(colnames(positive_adt_matrix_plot),
+                                             "_positive")
+
+colnames(neg_adt_matrix_plot) <- paste0(colnames(neg_adt_matrix_plot),
+                                        "_negative")
+
+positive_adt_matrix_plot <- positive_adt_matrix_plot %>%
+  data.frame %>%
+  tidyr::pivot_longer(cols = all_of(colnames(.))) %>%
+  dplyr::mutate(log_val = log(value), droplet_type = "positive")
+
+neg_adt_matrix_plot <- neg_adt_matrix_plot %>%
+  data.frame %>%
+  tidyr::pivot_longer(cols = all_of(colnames(.))) %>%
+  dplyr::mutate(log_val = log(value), droplet_type = "negative")
+
+plot_mat <- rbind(positive_adt_matrix_plot, neg_adt_matrix_plot)
+
+
+ggplot2::ggplot(plot_mat, aes(x = name, y = log_val, fill = droplet_type)) +
+  ggplot2::geom_violin() + 
+  ggplot2::scale_fill_brewer(palette = "Set1") +
+  ggplot2::theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
 # Save
 saveRDS(positive_object, file.path(save_dir, "rda_obj", "seurat_adt.rds"))

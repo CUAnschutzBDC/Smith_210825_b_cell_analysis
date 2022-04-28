@@ -17,9 +17,9 @@ sample_info <- sample_list[[sample]]
 
 ```{r {{sample}}-{{type}}-all_gene, fig.height=8, fig.width=8}
 merged_seurat <- sample_info$seurat_object
-cluster_colors <- sample_info$cluster_colors
+cluster_colors <- sample_info$all_celltype_cluster_colors
 
-sep_1 <- violin_col_by_1 <- "RNA_cluster"
+sep_1 <- violin_col_by_1 <- "celltype_new_cluster"
 colors_1 <- cluster_colors
 umap_cols_1 <- colors_1
 
