@@ -643,93 +643,22 @@ I next subset the data to only cluster 6 and repeated the analysis pipeline (inc
 
 Overall, this seemed to work. The clustering produced cell populations with different levels of IgM, IgD, and FCRL5.
 
-I clustered both using the RNA alone and using a weighted combination of the RNA and ADT (surface protein). Generally, a similar weight was given to both the RNA and ADT for all cells. Overall, the results of the two clustering approaches are similar but not identical. Based on my understanding, your subset of interest would be cluster 1 from the RNA custering and cluster 2 from the combined clutering. I am showing violin plots for both the RNA clustering and the combined clustering below
+I clustered using  a weighted combination of the RNA and ADT (surface protein). Generally, a similar weight was given to both the RNA and ADT for all cells. 
 
-## Clustering based on RNA alone
 
-### Plots of ADTs {.tabset}
-```{r "plot-adts-cluster6", echo = F}
-merged_seurat <- readRDS(sample_info$subset_path)
-
-size <- 1.25
-
-cluster_colors <- LaCroixColoR::lacroix_palette(name = "Coconut",
-                                                n = 3)
-
-assay <- "CLR_ADT"
-group <- "adt_subset"
-type <- "adt"
-sample <- "subset"
-
-sep_1 <- violin_col_by_1 <- "RNA_cluster"
-colors_1 <- cluster_colors
-umap_cols_1 <- colors_1
-
-plot_type = "rna.umap"
-
-extra_pound_gene <- "#"
-
-gene_template <- file.path(here(),
-                           "src/scripts/templates/gene_plot_template_short.Rmd")
-
-adt_genes <- c("IgM", "IgD", "CXCR5.1", "CD21", "CD27.1")
-
-genes <- adt_genes
-
-gene_chunks <- genes %>%
-  map(~knit_expand(file = gene_template, sample = sample, group = group,
-                   gene = .x, subset = FALSE))
-```
-
-`r knit_child(text = gene_chunks)`
-
-### Plots of RNA {.tabset}
-```{r "plot-genes-cluster6", echo = F}
-
-assay <- "RNA"
-group <- "rna_subset"
-type <- "rna"
-
-extra_pound_gene <- "#"
-
-rna_genes <- c("CR2", # CD21,
-               "CD27",
-               "CXCR5",
-               "IGHD", # IgD
-               "IGHM", # IgM
-               "XBP1",
-               "IRF4",
-               "CD38",
-               "JCHAIN",
-               "ITGAX", #Cd11c
-               "IGHG2",
-               "IGHG1",
-               "FAS", #CD95
-               "FCRL5"
-)
-
-genes <- rna_genes
-
-gene_template <- file.path(here(),
-                           "src/scripts/templates/gene_plot_template_short.Rmd")
-
-gene_chunks <- genes %>%
-  map(~knit_expand(file = gene_template, sample = sample, group = group,
-                   gene = .x, subset = FALSE))
-```
-
-`r knit_child(text = gene_chunks)`
-
-## Clustering based on RNA and ADT
 
 ### Plots of ADTs {.tabset}
 ```{r "plot-adts-cluster6-wnn", echo = F}
+merged_seurat <- readRDS(sample_info$subset_path)
+
 plot_type <- "wnn.umap"
 
 size <- 1.25
 
 cluster_colors <- LaCroixColoR::lacroix_palette(name = "Coconut",
                                                 n = 3)
+
+names(cluster_colors) <- unique(merged_seurat$combined_cluster)
 
 
 assay <- "CLR_ADT"
@@ -767,21 +696,6 @@ type <- "rna"
 extra_pound_gene <- "#"
 
 
-rna_genes <- c("CR2", # CD21,
-               "CD27",
-               "CXCR5",
-               "IGHD", # IgD
-               "IGHM", # IgM
-               "XBP1",
-               "IRF4",
-               "CD38",
-               "JCHAIN",
-               "ITGAX", #Cd11c
-               "IGHG2",
-               "IGHG1",
-               "FAS", #CD95
-               "FCRL5"
-)
 
 genes <- rna_genes
 
@@ -795,6 +709,29 @@ gene_chunks <- genes %>%
 
 `r knit_child(text = gene_chunks)`
 
+### heatmap of RNA
+
+```{r, fig.height=5, fig.width=12}
+DefaultAssay(merged_seurat) <- "RNA"
+
+# Make a heatmap with these genes
+rna_heatmap <- plot_heatmap(merged_seurat, genes, "combined_cluster",
+                            average_expression = FALSE,
+                            colors = cluster_colors,
+                            cluster_rows = TRUE)[[4]]
+
+# Make a heatmap using the average values from each cluster
+rna_heatmap_ave <- plot_heatmap(merged_seurat, genes,
+                                "combined_cluster",
+                                average_expression = TRUE,
+                                colors = cluster_colors,
+                                cluster_rows = TRUE)[[4]]
+
+plot_grid(rna_heatmap, rna_heatmap_ave,
+          nrow = 1, ncol = 2,
+          align = "hv",
+          axis = "tb")
+```
 
 ## Heatmap of cluster 6 DE
 1. Left, expression of DE genes in clusters. I've colored the x axis by the cluster.
