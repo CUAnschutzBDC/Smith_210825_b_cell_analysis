@@ -24,6 +24,10 @@ if(!exists("extra_pound_gene")){
   extra_pound_gene <- ""
 }
 
+if(!exists("size")){
+  size = 0.25
+}
+
 
 ```
 
@@ -43,16 +47,17 @@ violin1 <- featDistPlot(merged_seurat, gene, sep_by = sep_1,
                       
 
 umap1 <- plotDimRed(merged_seurat, col_by = gene, plot_type = plot_type,
-                    assay = assay)[[1]]
+                    assay = assay, size = size)[[1]]
 
 umap3 <- plotDimRed(merged_seurat, col_by = sep_1,
-                    plot_type = plot_type, color = umap_cols_1)[[1]]
+                    plot_type = plot_type, color = umap_cols_1,
+                    size = size)[[1]]
 
 if(subset){
   seurat_sub <- subset(merged_seurat, idents = sample)
   umap2 <- plotDimRed(merged_seurat, col_by = gene, plot_type = plot_type,
                       highlight_group = TRUE, meta_data_col = meta_data_col,
-                      group = sample, assay = assay)[[1]]
+                      group = sample, assay = assay, size = size)[[1]]
   
   text_labels <- c("A", "B", "C", "D")
 } else {
