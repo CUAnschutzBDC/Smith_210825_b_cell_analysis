@@ -376,6 +376,31 @@ all_gene_chunks <- names(sample_list) %>%
 
 `r knit_child(text = all_gene_chunks)`
 
+## Heatmap of RNA
+
+```{r, fig.height=5, fig.width=12}
+DefaultAssay(seurat_data) <- "RNA"
+new_colors <- sample_info$all_celltype_cluster_colors
+
+# Make a heatmap with these genes
+rna_heatmap <- plot_heatmap(seurat_data, genes, "celltype_new_cluster",
+                            average_expression = FALSE,
+                            colors = new_colors,
+                            cluster_rows = TRUE)[[4]]
+
+# Make a heatmap using the average values from each cluster
+rna_heatmap_ave <- plot_heatmap(merged_seurat, genes,
+                                "celltype_new_cluster",
+                                average_expression = TRUE,
+                                colors = new_colors,
+                                cluster_rows = TRUE)[[4]]
+
+plot_grid(rna_heatmap, rna_heatmap_ave,
+          nrow = 1, ncol = 2,
+          align = "hv",
+          axis = "tb")
+```
+
 ## Density plots ADT {.tabset}
 I next looked at a density plot of each protein to see if there was any patterns that could be used to find cutoffs for identifying your subset.
 
