@@ -9,3 +9,5 @@ results/*/outs/*
 logs
 .Rproj.user
 src/scripts/*html
+results_vdj
+test
