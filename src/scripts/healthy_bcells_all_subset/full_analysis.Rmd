@@ -89,8 +89,7 @@ sample_list <- lapply(names(samples), function(x){
                       "5" = "#cc4570",
                       "6" = "#924bdb",
                       "7" = "#648d4f",
-                      "8" = "#a06846",
-                      "9" = "#7184b0")
+                      "8" = "#a06846")
   
   all_cluster_colors <- c("6.0" = "#924bdb",
                           "0" = "#69ba3d",
@@ -102,8 +101,7 @@ sample_list <- lapply(names(samples), function(x){
                           "5" = "#cc4570",
                           "7" = "#648d4f",
                           "6.2" = "#985978",
-                          "8" = "#a06846",
-                          "9" = "#7184b0")
+                          "8" = "#a06846")
    
    celltype_cluster_colors <- cluster_colors
    celltype_cluster <- levels(seurat_data$celltype_cluster)
