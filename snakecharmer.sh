@@ -10,7 +10,7 @@ set -o nounset -o pipefail -o errexit -x
 
 mkdir -p logs
 
-module load cellranger/6.0.1
+#module load cellranger/6.0.1
 
 # Function to run snakemake
 run_snakemake() {
