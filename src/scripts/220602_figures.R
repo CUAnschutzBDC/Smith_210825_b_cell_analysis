@@ -4,6 +4,7 @@ library(cowplot)
 library(here)
 library(scAnalysisR)
 library(grid)
+library(ggrepel)
 
 # Set theme
 ggplot2::theme_set(ggplot2::theme_classic(base_size = 10))
@@ -27,6 +28,14 @@ if(normalization_method == "SCT"){
   SCT <- FALSE
   seurat_assay <- "RNA"
 }
+
+cd21_genes <- c("HCK", "RPS18", "CD74", "TBX21", "RPL3", "RPLP1", "FCRL5",
+                "FGR", "MS4A1", "LTB", "CCR7", "FCRLA", "CD72", "TNFRSF1B",
+                "SYK", "CXCR4", "IL4R")
+
+clus_6_genes <- c("IGHM", "IGHD", "NIBAN3", "CD79B", "NCF1", "FCER2", "FOXP1",
+                  "CD1C", "SCPEP1", "HOPX", "LGALS1", "NKG7", "TNFRSF1B",
+                  "IFI30", "CD99")
 
 # Set directories
 base_dir <- here()
@@ -195,5 +204,74 @@ pdf(file.path(fig_dir, "cluster_9_quality.pdf"),
     width = 10, height = 10)
 
 plot(violin_plot)
+
+dev.off()
+
+## Volcano plots ---------------------------------------------------------------
+Idents(seurat_data) <- "cd21_level"
+cd21_markers <- FindMarkers(seurat_data, ident.1 = "CD21_pos",
+                            ident.2 = "CD21_neg", min.pct = 0,
+                            logfc.threshold = 0) 
+
+cd21_markers <- cd21_markers %>%
+  dplyr::mutate(log_pval = -log(p_val_adj),
+                color = ifelse(p_val_adj < 0.05 & abs(avg_log2FC) > 0.25,
+                               "significant", "not_significant")) %>%
+  rownames_to_column("gene") %>%
+  dplyr::mutate(gene_label = ifelse(gene %in% all_of(cd21_genes), gene, ""))
+
+color_list <- c("significant" = "#B3669E",
+                "not_significant" = "#000000")
+
+
+pdf(file.path(fig_dir, "cd21_volcano.pdf"),
+    width = 6, height = 6)
+
+print(ggplot(cd21_markers, aes(x = avg_log2FC, y = log_pval, color = color)) +
+        geom_point() +
+        geom_label_repel(aes(label = gene_label),
+                         box.padding   = 0.5, 
+                         point.padding = 0.5,
+                         max.overlaps = Inf,
+                         min.segment.length = 0,
+                         segment.color = 'grey50',
+                         force = 3,
+                         force_pull = 0.25) +
+        scale_color_manual(values = color_list) +
+        xlim(c(-3, 2)))
+
+dev.off()
+
+Idents(seurat_data) <- "new_cluster"
+
+cluster_6_markers <- FindMarkers(seurat_data, ident.1 = "6.1",
+                                 ident.2 = "6.2", min.pct = 0,
+                                 logfc.threshold = 0) 
+
+cluster_6_markers <- cluster_6_markers %>%
+  dplyr::mutate(log_pval = -log(p_val_adj),
+                color = ifelse(p_val_adj < 0.05 & abs(avg_log2FC) > 0.25,
+                               "significant", "not_significant")) %>%
+  rownames_to_column("gene") %>%
+  dplyr::mutate(gene_label = ifelse(gene %in% all_of(clus_6_genes), gene, ""))
+
+color_list <- c("significant" = "#B3669E",
+                "not_significant" = "#000000")
+
+pdf(file.path(fig_dir, "6.1_vs_6.2_volcano.pdf"),
+    width = 6, height = 6)
+
+print(ggplot(cluster_6_markers, aes(x = avg_log2FC, y = log_pval, color = color)) +
+        geom_point() +
+        scale_color_manual(values = color_list) +
+        geom_label_repel(aes(label = gene_label),
+                         box.padding   = 0.5, 
+                         point.padding = 0.5,
+                         max.overlaps = Inf,
+                         min.segment.length = 0,
+                         segment.color = 'grey50',
+                         force = 2.5,
+                         force_pull = 1) +
+        ylim(c(0, 90)))
 
 dev.off()
