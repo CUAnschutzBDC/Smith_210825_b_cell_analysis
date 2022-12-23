@@ -104,6 +104,12 @@ plotDimRed(seurat_data, col_by = "cd21_level", plot_type = "rna.umap",
                      "CD21_neg" = "blue",
                      "CD21_pos" = "red"))
 
+percent_df <- data.frame(table(seurat_data$RNA_cluster, seurat_data$cd21_level)) %>%
+  pivot_wider(names_from = Var2, values_from = Freq) %>%
+  mutate(total = rowSums(.[2:4])) %>%
+  mutate(percent = CD21_neg/ total) 
+
+
 write.csv(marker_list, file.path(save_dir, "files/DE/cd21_de.csv"))
 
 cd21_wb <- openxlsx::createWorkbook()

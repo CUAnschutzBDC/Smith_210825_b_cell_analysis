@@ -6,6 +6,9 @@ library(scAnalysisR)
 library(grid)
 library(ggrepel)
 
+# NOTE
+# Cluster 9 was removed in 09_find_markers_all_clusters.R - I don't remember why
+
 # Set theme
 ggplot2::theme_set(ggplot2::theme_classic(base_size = 10))
 
@@ -71,14 +74,15 @@ dev.off()
 
 ## Heatmaps --------------------------------------------------------------------
 
-seurat_data$celltype_new_cluster <- factor(seurat_data$celltype_new_cluster,
-                                           levels = c("Mem_B_0", "Bulk_B_1",
-                                                      "Mem_B_2", "Bulk_B_3",
-                                                      "Bulk_B_4", "Mem_B_5",
-                                                      "Mem_B_6.0", "Mem_B_6.1",
-                                                      "Mem_B_6.2", "Mem_B_7",
-                                                      "Bulk_B_8"))
+# seurat_data$celltype_new_cluster <- factor(seurat_data$celltype_new_cluster,
+#                                            levels = c("Mem_B_0", "Bulk_B_1",
+#                                                       "Mem_B_2", "Bulk_B_3",
+#                                                       "Bulk_B_4", "Mem_B_5",
+#                                                       "Mem_B_6.0", "Mem_B_6.1",
+#                                                       "Mem_B_6.2", "Mem_B_7",
+#                                                       "Bulk_B_8"))
 
+seurat_data$celltype_new_cluster <- factor(seurat_data$celltype_new_cluster)
 
 celltype_cluster_colors_two <- cluster_colors_two
 all_celltype_cluster <- unique(seurat_data$celltype_new_cluster)
@@ -86,6 +90,9 @@ all_celltype_cluster <- all_celltype_cluster[order(match(gsub(".*_", "",
                                                               all_celltype_cluster),
                                                          names(cluster_colors_two)))]
 names(celltype_cluster_colors_two) <- all_celltype_cluster
+
+celltype_cluster_colors_two <- celltype_cluster_colors_two[
+  levels(seurat_data$celltype_new_cluster)]
 
 ### Based on DE of just the 9 main clusters
 # Get marker genes that are saved
