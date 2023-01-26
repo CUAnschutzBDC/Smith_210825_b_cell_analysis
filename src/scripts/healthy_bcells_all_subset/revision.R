@@ -145,5 +145,7 @@ table(all_data$cd27_expr) %>%
   mutate(total = sum(Freq)) %>%
   mutate(fraction = Freq / total)
 
+pdf(file.path(save_dir, "images", "igm_cd27.pdf"))
 make_plot("IGHM", "CD27", color = "cd27_expr")
 
+dev.off()
