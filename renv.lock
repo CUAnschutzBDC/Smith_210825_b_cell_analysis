@@ -51,10 +51,10 @@
     },
     "BiocManager": {
       "Package": "BiocManager",
-      "Version": "1.30.16",
+      "Version": "1.30.19",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "2fdca0877debdd4668190832cdee4c31"
+      "Hash": "726b3bc83ff8e0c35c7efdb74a462b0d"
     },
     "BiocParallel": {
       "Package": "BiocParallel",
@@ -502,6 +502,13 @@
       "Repository": "CRAN",
       "Hash": "f61dbaec772ccd2e17705c1e872e9e7c"
     },
+    "checkmate": {
+      "Package": "checkmate",
+      "Version": "2.0.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "a667800d5f0350371bedeb8b8b950289"
+    },
     "cli": {
       "Package": "cli",
       "Version": "3.2.0",
@@ -528,6 +535,13 @@
       "Version": "1.6.0",
       "Source": "Bioconductor",
       "Hash": "bb08bdacd80e3b3808839d0558793f75"
+    },
+    "clustree": {
+      "Package": "clustree",
+      "Version": "0.4.4",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "b3a782b3d11f03b920a0403279963c72"
     },
     "codetools": {
       "Package": "codetools",
@@ -822,12 +836,26 @@
       "Repository": "CRAN",
       "Hash": "dd68b9b215b2d3119603549a794003c3"
     },
+    "ggforce": {
+      "Package": "ggforce",
+      "Version": "0.3.3",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "4c64a588b497f8c088e1d308ddd40bc6"
+    },
     "ggplot2": {
       "Package": "ggplot2",
       "Version": "3.3.5",
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "d7566c471c7b17e095dd023b9ef155ad"
+    },
+    "ggraph": {
+      "Package": "ggraph",
+      "Version": "2.0.5",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "bb52a023e912142b8970ba883dd3b706"
     },
     "ggrastr": {
       "Package": "ggrastr",
@@ -904,6 +932,13 @@
       "Version": "1.72.0",
       "Source": "Bioconductor",
       "Hash": "008757628d8e6bacfe8f122954d8f024"
+    },
+    "graphlayouts": {
+      "Package": "graphlayouts",
+      "Version": "0.8.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "83ebd459dbc288ee4f7ef5f7d52594a9"
     },
     "gridExtra": {
       "Package": "gridExtra",
@@ -1100,6 +1135,12 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "a6b6d352e3ed897373ab19d8395c98d0"
+    },
+    "limma": {
+      "Package": "limma",
+      "Version": "3.50.1",
+      "Source": "Bioconductor",
+      "Hash": "1ffea80c91b4d2403fb3e3935626d336"
     },
     "listenv": {
       "Package": "listenv",
@@ -1679,6 +1720,13 @@
       "Repository": "CRAN",
       "Hash": "8a8f02d1934dfd6431c671361510dd0b"
     },
+    "tidygraph": {
+      "Package": "tidygraph",
+      "Version": "1.2.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "19f5f240d255ff0bf91e76d062fdc176"
+    },
     "tidyr": {
       "Package": "tidyr",
       "Version": "1.2.0",
@@ -1706,6 +1754,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "a80abeb527a977e4bef21873d29222dd"
+    },
+    "tweenr": {
+      "Package": "tweenr",
+      "Version": "1.0.2",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "6cc663f970a529dbf776f11d5bcd1a2e"
     },
     "tzdb": {
       "Package": "tzdb",
