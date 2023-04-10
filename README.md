@@ -77,5 +77,6 @@ Once this is done, you can run the scripts in the `healthy_bcells_all` [director
 
 If you only want the final umap, you can just download the metadata, subset to only cells that are "TRUE" for the column "in_final_obj". The UMAP and cluster data are contained with the metadata.
 
+The metadata is also contained in this repository under `geo/final_metadata.csv`
 
 
